@@ -1,21 +1,55 @@
 "use client";
-/*
-Note: "use client" is a Next.js App Router directive that tells React to render the component as
-a client component rather than a server component. This establishes the server-client boundary,
-providing access to client-side functionality such as hooks and event handlers to this component and
-any of its imported children. Although the SpeciesCard component itself does not use any client-side
-functionality, it is beneficial to move it to the client because it is rendered in a list with a unique
-key prop in species/page.tsx. When multiple component instances are rendered from a list, React uses the unique key prop
-on the client-side to correctly match component state and props should the order of the list ever change.
-React server components don't track state between rerenders, so leaving the uniquely identified components (e.g. SpeciesCard)
-can cause errors with matching props and state in child components if the list order changes.
-*/
+
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
 import type { Database } from "@/lib/schema";
+import supabase from "@/lib/supabase";
 import Image from "next/image";
+import { useState } from "react";
+import EditSpeciesDialog from "./editspecies";
 import SpeciesDetailDialog from "./speciesdetail";
+
 type Species = Database["public"]["Tables"]["species"]["Row"];
 
-export default function SpeciesCard({ species }: { species: Species }) {
+export default function SpeciesCard({ species, sessionId }: { species: Species; sessionId: string }) {
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Function to delete species
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${species.scientific_name}?`)) {
+      return; // Exit if the user cancels
+    }
+
+    setDeleting(true);
+
+    const { data, error } = await supabase.from("species").delete().eq("id", species.id).select(); // Fetch response to confirm deletion
+
+    setDeleting(false);
+
+    if (error) {
+      console.error("❌ Deletion failed:", error.message);
+      return toast({
+        title: "Error",
+        description: `Failed to delete species: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+
+    if (data.length === 0) {
+      console.log("⚠️ No rows deleted. Check if Row Level Security (RLS) is enabled.");
+    } else {
+      console.log("✅ Species deleted:", data);
+    }
+
+    toast({
+      title: "Species Deleted",
+      description: `"${species.scientific_name}" has been removed.`,
+    });
+
+    window.location.reload();
+  };
+
   return (
     <div className="m-4 w-72 min-w-72 flex-none rounded border-2 p-3 shadow">
       {species.image && (
@@ -26,8 +60,33 @@ export default function SpeciesCard({ species }: { species: Species }) {
       <h3 className="mt-3 text-2xl font-semibold">{species.scientific_name}</h3>
       <h4 className="text-lg font-light italic">{species.common_name}</h4>
       <p>{species.description ? species.description.slice(0, 150).trim() + "..." : ""}</p>
-      {/* Replace the button with the detailed view dialog.*/}
+
+      {/* Show Species Details */}
       <SpeciesDetailDialog species={species} />
+
+      {/* Show Edit/Delete buttons only if the logged-in user is the author */}
+      {sessionId === species.author && (
+        <div className="mt-3 flex justify-between">
+          <Button
+            onClick={() => setEditDialogOpen(true)}
+            className="mr-1 w-1/2 bg-blue-500 text-white hover:bg-blue-700"
+          >
+            Edit
+          </Button>
+          <Button
+            onClick={handleDelete}
+            className="ml-1 w-1/2 bg-red-500 text-white hover:bg-red-700"
+            disabled={deleting}
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+        </div>
+      )}
+
+      {/* Render the Edit Dialog when the button is clicked */}
+      {editDialogOpen && (
+        <EditSpeciesDialog species={species} isOpen={editDialogOpen} onClose={() => setEditDialogOpen(false)} />
+      )}
     </div>
   );
 }
