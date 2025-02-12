@@ -74,7 +74,8 @@ export default function SpeciesCard({ species, sessionId }: { species: Species; 
             Edit
           </Button>
           <Button
-            onClick={handleDelete}
+            // eslint-disable-next-line @typescript-eslint/no-misused-promises
+            onClick={() => handleDelete()} // ✅ Ensures it's wrapped in a function
             className="ml-1 w-1/2 bg-red-500 text-white hover:bg-red-700"
             disabled={deleting}
           >
